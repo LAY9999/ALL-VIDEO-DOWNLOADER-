@@ -3,7 +3,7 @@ workflows:
   android-workflow:
     name: ALL VIDEO DOWNLOADER APK
     max_build_duration: 60
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
 
     environment:
       flutter: stable
@@ -27,7 +27,7 @@ workflows:
   web-workflow:
     name: ALL VIDEO DOWNLOADER WEB
     max_build_duration: 60
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
 
     environment:
       flutter: stable
