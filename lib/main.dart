@@ -188,21 +188,22 @@ Future<void> _downloadDirectMp4() async {
       ),
     );
   } catch (e) {
-    if (!mounted) return;
+  if (!mounted) return;
 
-    setState(() {
-      _isDownloading = false;
-    });
+  setState(() {
+    _isDownloading = false;
+  });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          (e is DioException && CancelToken.isCancel(e))
-        ),
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        (e is DioException && CancelToken.isCancel(e))
+            ? 'Download cancelled'
+            : 'Download failed: $e',
       ),
-    );
+    ),
+  );
   }
-}
   @override
 void dispose() {
   _cancelToken?.cancel();
