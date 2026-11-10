@@ -197,9 +197,9 @@ Future<void> _downloadDirectMp4() async {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          CancelToken.isCancel(e)
-              ? 'Download cancelled'
-              : 'Download failed: $e',
+          (e is Exception && CancelToken.isCancel(e))
+    ? 'Download cancelled'
+    : 'Download failed: $e',
         ),
       ),
     );
