@@ -91,7 +91,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController controller =
       TextEditingController();
+final DownloadService _downloadService = DownloadService();
 
+bool _isDownloading = false;
+double _downloadProgress = 0.0;
+String? _downloadedPath;
+CancelToken? _cancelToken;
   String platform = '';
   String message = 'Paste your video link here';
 
