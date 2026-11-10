@@ -2,10 +2,15 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'services/download_service.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const AllVideoDownloader());
 }
+
+// ==========================================
+// MAIN APP
+// ==========================================
 
 class AllVideoDownloader extends StatelessWidget {
   const AllVideoDownloader({super.key});
@@ -24,6 +29,10 @@ class AllVideoDownloader extends StatelessWidget {
     );
   }
 }
+
+// ==========================================
+// BOTTOM NAVIGATION
+// ==========================================
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -69,10 +78,12 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
           NavigationDestination(
             icon: Icon(Icons.history),
+            selectedIcon: Icon(Icons.history),
             label: 'History',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
             label: 'Settings',
           ),
         ],
@@ -80,6 +91,10 @@ class _MainNavigationState extends State<MainNavigation> {
     );
   }
 }
+
+// ==========================================
+// HOME SCREEN
+// ==========================================
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -91,13 +106,20 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController controller =
       TextEditingController();
-final DownloadService _downloadService = DownloadService();
 
-bool _isDownloading = false;
-double _downloadProgress = 0.0;
-String? _downloadedPath;
-CancelToken? _cancelToken;
+  final DownloadService _downloadService =
+      DownloadService();
+
+  bool _isDownloading = false;
+
+  double _downloadProgress = 0.0;
+
+  String? _downloadedPath;
+
+  CancelToken? _cancelToken;
+
   String platform = '';
+
   String message = 'Paste your video link here';
 
   final Map<String, List<String>> platforms = {
@@ -108,6 +130,10 @@ CancelToken? _cancelToken;
     'X (Twitter)': ['x.com', 'twitter.com'],
     'YouTube': ['youtube.com', 'youtu.be'],
   };
+
+  // ========================================
+  // DETECT VIDEO PLATFORM
+  // ========================================
 
   void detectPlatform() {
     final input = controller.text.trim();
@@ -124,92 +150,142 @@ CancelToken? _cancelToken;
     }
 
     final host = uri.host.toLowerCase();
+
     String detected = '';
 
     for (final entry in platforms.entries) {
-      if (entry.value.any((domain) =>
-          host == domain || host.endsWith('.$domain'))) {
+      if (entry.value.any(
+        (domain) =>
+            host == domain || host.endsWith('.$domain'),
+      )) {
         detected = entry.key;
         break;
       }
     }
+
     setState(() {
       platform = detected;
+
       message = detected.isEmpty
           ? 'Unsupported platform'
           : 'Platform detected successfully';
     });
   }
-Future<void> _downloadDirectMp4() async {
-  final url = controller.text.trim();
 
-  if (url.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Please enter a video URL'),
-      ),
-    );
-    return;
-  }
+  // ========================================
+  // DOWNLOAD DIRECT MP4
+  // ========================================
 
-  final token = CancelToken();
+  Future<void> _downloadDirectMp4() async {
+    final url = controller.text.trim();
 
-  setState(() {
-    _isDownloading = true;
-    _downloadProgress = 0;
-    _downloadedPath = null;
-    _cancelToken = token;
-  });
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a video URL'),
+        ),
+      );
+      return;
+    }
 
-  try {
-    final path = await _downloadService.downloadDirectMp4(
-      url,
-      onProgress: (received, total) {
-        if (!mounted) return;
+    final uri = Uri.tryParse(url);
 
-        setState(() {
-          _downloadProgress =
-              total > 0 ? received / total : 0.0;
-        });
-      },
-      cancelToken: token,
-    );
+    if (uri == null ||
+        !uri.hasAuthority ||
+        !['http', 'https'].contains(uri.scheme)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid video URL'),
+        ),
+      );
+      return;
+    }
 
-    if (!mounted) return;
+    final token = CancelToken();
 
     setState(() {
-      _downloadedPath = path;
-      _isDownloading = false;
+      _isDownloading = true;
+      _downloadProgress = 0.0;
+      _downloadedPath = null;
+      _cancelToken = token;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Video downloaded successfully!'),
-      ),
-    );
-  } catch (e) {
-  if (!mounted) return;
+    try {
+      final path = await _downloadService.downloadDirectMp4(
+        url,
+        onProgress: (received, total) {
+          if (!mounted) return;
 
-  setState(() {
-    _isDownloading = false;
-  });
+          setState(() {
+            _downloadProgress = total > 0
+                ? received / total
+                : 0.0;
+          });
+        },
+        cancelToken: token,
+      );
 
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Text(
-        (e is DioException && CancelToken.isCancel(e))
-            ? 'Download cancelled'
-            : 'Download failed: $e',
-      ),
-    ),
-  );
+      if (!mounted) return;
+
+      setState(() {
+        _downloadedPath = path;
+        _isDownloading = false;
+        _cancelToken = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Video downloaded successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      final cancelled = e is DioException &&
+          e.type == DioExceptionType.cancel;
+
+      setState(() {
+        _isDownloading = false;
+        _cancelToken = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            cancelled
+                ? 'Download cancelled'
+                : 'Download failed: $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
+
+  // ========================================
+  // CANCEL DOWNLOAD
+  // ========================================
+
+  void _cancelDownload() {
+    _cancelToken?.cancel('Cancelled by user');
+  }
+
+  // ========================================
+  // DISPOSE
+  // ========================================
+
   @override
-void dispose() {
-  _cancelToken?.cancel();
-  controller.dispose();
-  super.dispose();
-}
+  void dispose() {
+    _cancelToken?.cancel();
+    controller.dispose();
+    super.dispose();
+  }
+
+  // ========================================
+  // HOME SCREEN UI
+  // ========================================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -219,19 +295,26 @@ void dispose() {
         centerTitle: true,
         title: const Text(
           'ALL VIDEO DOWNLOADER',
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+          ),
         ),
       ),
+
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+
           const SizedBox(height: 25),
+
           const Icon(
             Icons.cloud_download_rounded,
             size: 100,
             color: Color(0xFF1769FF),
           ),
+
           const SizedBox(height: 15),
+
           const Text(
             'Download Your Videos',
             textAlign: TextAlign.center,
@@ -240,7 +323,9 @@ void dispose() {
               fontWeight: FontWeight.bold,
             ),
           ),
+
           const SizedBox(height: 30),
+
           const Text(
             'Paste Video Link',
             style: TextStyle(
@@ -248,7 +333,9 @@ void dispose() {
               fontWeight: FontWeight.bold,
             ),
           ),
+
           const SizedBox(height: 12),
+
           TextField(
             controller: controller,
             keyboardType: TextInputType.url,
@@ -263,7 +350,9 @@ void dispose() {
               ),
             ),
           ),
+
           const SizedBox(height: 15),
+
           SizedBox(
             height: 55,
             child: ElevatedButton.icon(
@@ -276,19 +365,25 @@ void dispose() {
               ),
             ),
           ),
+
           const SizedBox(height: 20),
+
           Card(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
+
                   const Icon(
                     Icons.info_outline,
                     size: 32,
                     color: Colors.blue,
                   ),
+
                   const SizedBox(height: 10),
+
                   Text(message),
+
                   if (platform.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.all(8),
@@ -305,7 +400,100 @@ void dispose() {
               ),
             ),
           ),
+
           const SizedBox(height: 25),
+
+          // DOWNLOAD BUTTON
+
+          SizedBox(
+            width: double.infinity,
+            height: 55,
+            child: ElevatedButton.icon(
+              onPressed: _isDownloading
+                  ? null
+                  : _downloadDirectMp4,
+              icon: const Icon(Icons.download),
+              label: const Text(
+                'DOWNLOAD MP4',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1769FF),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+
+          // DOWNLOAD PROGRESS
+
+          if (_isDownloading) ...[
+            const SizedBox(height: 20),
+
+            const Text(
+              'Downloading...',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            LinearProgressIndicator(
+              value: _downloadProgress > 0
+                  ? _downloadProgress
+                  : null,
+              minHeight: 8,
+              borderRadius: BorderRadius.circular(10),
+            ),
+
+            const SizedBox(height: 10),
+
+            Text(
+              '${(_downloadProgress * 100).toStringAsFixed(0)}%',
+              textAlign: TextAlign.center,
+            ),
+
+            const SizedBox(height: 10),
+
+            TextButton.icon(
+              onPressed: _cancelDownload,
+              icon: const Icon(Icons.cancel),
+              label: const Text('CANCEL DOWNLOAD'),
+            ),
+          ],
+
+          // DOWNLOAD SUCCESS
+
+          if (_downloadedPath != null) ...[
+            const SizedBox(height: 20),
+
+            const Icon(
+              Icons.check_circle,
+              color: Colors.green,
+              size: 35,
+            ),
+
+            const Text(
+              'Download Completed!',
+              style: TextStyle(
+                color: Colors.green,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            SelectableText(
+              _downloadedPath!,
+              textAlign: TextAlign.center,
+            ),
+          ],
+
+          const SizedBox(height: 25),
+
           const Text(
             'SUPPORTED PLATFORMS',
             style: TextStyle(
@@ -313,7 +501,9 @@ void dispose() {
               fontWeight: FontWeight.bold,
             ),
           ),
+
           const SizedBox(height: 12),
+
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -334,17 +524,27 @@ void dispose() {
               );
             }).toList(),
           ),
+
           const SizedBox(height: 25),
+
           const Text(
             'Only download content you are authorized to save.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(
+              color: Colors.grey,
+            ),
           ),
+
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 }
+
+// ==========================================
+// DOWNLOAD SCREEN
+// ==========================================
 
 class DownloadScreen extends StatelessWidget {
   const DownloadScreen({super.key});
@@ -359,6 +559,10 @@ class DownloadScreen extends StatelessWidget {
   }
 }
 
+// ==========================================
+// HISTORY SCREEN
+// ==========================================
+
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
@@ -372,6 +576,10 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
+// ==========================================
+// SETTINGS SCREEN
+// ==========================================
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -384,6 +592,10 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 }
+
+// ==========================================
+// SIMPLE PAGE
+// ==========================================
 
 class SimplePage extends StatelessWidget {
   final String title;
@@ -411,8 +623,15 @@ class SimplePage extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 75, color: Colors.blue),
+
+              Icon(
+                icon,
+                size: 75,
+                color: Colors.blue,
+              ),
+
               const SizedBox(height: 20),
+
               Text(
                 title,
                 style: const TextStyle(
@@ -420,7 +639,9 @@ class SimplePage extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+
               const SizedBox(height: 12),
+
               Text(
                 description,
                 textAlign: TextAlign.center,
