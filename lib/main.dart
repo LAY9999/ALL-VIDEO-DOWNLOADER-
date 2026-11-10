@@ -128,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> {
         break;
       }
     }
-
     setState(() {
       platform = detected;
       message = detected.isEmpty
@@ -136,7 +135,71 @@ class _HomeScreenState extends State<HomeScreen> {
           : 'Platform detected successfully';
     });
   }
+Future<void> _downloadDirectMp4() async {
+  final url = controller.text.trim();
 
+  if (url.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Please enter a video URL'),
+      ),
+    );
+    return;
+  }
+
+  final token = CancelToken();
+
+  setState(() {
+    _isDownloading = true;
+    _downloadProgress = 0;
+    _downloadedPath = null;
+    _cancelToken = token;
+  });
+
+  try {
+    final path = await _downloadService.downloadDirectMp4(
+      url,
+      onProgress: (received, total) {
+        if (!mounted) return;
+
+        setState(() {
+          _downloadProgress =
+              total > 0 ? received / total : 0.0;
+        });
+      },
+      cancelToken: token,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _downloadedPath = path;
+      _isDownloading = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Video downloaded successfully!'),
+      ),
+    );
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() {
+      _isDownloading = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          CancelToken.isCancel(e)
+              ? 'Download cancelled'
+              : 'Download failed: $e',
+        ),
+      ),
+    );
+  }
+}
   @override
   void dispose() {
     controller.dispose();
