@@ -5,7 +5,18 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 
 class DownloadService {
-  final Dio _dio = Dio();
+  final Dio _dio = Dio(
+    BaseOptions(
+      connectTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(minutes: 10),
+      sendTimeout: const Duration(seconds: 30),
+      followRedirects: true,
+      maxRedirects: 5,
+      headers: {
+        'Accept': 'video/mp4, video/*, application/octet-stream, */*',
+      },
+    ),
+  );
 
   Future<String> downloadDirectMp4(
     String url, {
@@ -17,11 +28,13 @@ class DownloadService {
 
     if (uri == null ||
         !uri.hasAuthority ||
-        !['http', 'https'].contains(uri.scheme)) {
+        !['http', 'https'].contains(uri.scheme) ||
+        uri.host.isEmpty) {
       throw Exception('Invalid download URL');
     }
 
-    final directory = await getApplicationDocumentsDirectory();
+    final directory =
+        await getApplicationDocumentsDirectory();
 
     final downloadDirectory = Directory(
       '${directory.path}/Downloads',
@@ -39,12 +52,19 @@ class DownloadService {
       '_',
     );
 
+    if (safeName.isEmpty) {
+      safeName =
+          'video_${DateTime.now().millisecondsSinceEpoch}.mp4';
+    }
+
     if (!safeName.toLowerCase().endsWith('.mp4')) {
       safeName = '$safeName.mp4';
     }
 
     final savePath =
         '${downloadDirectory.path}/$safeName';
+
+    final file = File(savePath);
 
     try {
       final response = await _dio.download(
@@ -57,40 +77,51 @@ class DownloadService {
         },
         options: Options(
           followRedirects: true,
+          maxRedirects: 5,
           receiveTimeout: const Duration(minutes: 10),
           headers: {
-            'Accept': 'video/mp4, video/*, */*',
+            'Accept':
+                'video/mp4, video/*, application/octet-stream, */*',
           },
         ),
       );
+
+      final statusCode = response.statusCode;
+
+      if (statusCode == null ||
+          statusCode < 200 ||
+          statusCode >= 300) {
+        throw Exception(
+          'Server returned status code: $statusCode',
+        );
+      }
 
       final contentType = response.headers
           .value(Headers.contentTypeHeader)
           ?.toLowerCase();
 
-      if (response.statusCode == null ||
-          response.statusCode! < 200 ||
-          response.statusCode! >= 300) {
-        throw Exception('Download failed');
-      }
-
       if (contentType != null &&
           (contentType.contains('text/html') ||
-           contentType.contains('application/json'))) {
-        await File(savePath).delete();
-        throw Exception('The URL does not provide a video file');
+           contentType.contains('application/json') ||
+           contentType.contains('text/plain'))) {
+        throw Exception(
+          'This URL does not provide a direct video file.',
+        );
       }
 
-      final file = File(savePath);
+      if (!await file.exists()) {
+        throw Exception('Downloaded file was not found');
+      }
 
-      if (!await file.exists() || await file.length() == 0) {
+      final fileSize = await file.length();
+
+      if (fileSize == 0) {
         throw Exception('Downloaded file is empty');
       }
 
       return savePath;
-    } catch (error) {
-      final file = File(savePath);
 
+    } catch (e) {
       if (await file.exists()) {
         await file.delete();
       }
