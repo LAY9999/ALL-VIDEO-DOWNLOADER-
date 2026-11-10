@@ -205,11 +205,12 @@ Future<void> _downloadDirectMp4() async {
     );
   }
 }
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
+ @override
+void dispose() {
+  _cancelToken?.cancel();
+  controller.dispose();
+  super.dispose();
+}
 
   @override
   Widget build(BuildContext context) {
